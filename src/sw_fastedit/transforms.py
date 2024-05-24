@@ -366,7 +366,7 @@ class AddGuidanceSignald(MapTransform):
             else:
                 s = torch.zeros_like(img[0])[None]
                 result = torch.concat([img, s, s])
-            result = torch.round(result)
+            #result = torch.round(result)
             d[key] = result
         return d
 

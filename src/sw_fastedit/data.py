@@ -112,8 +112,8 @@ def get_spacing(args):
     HECKTOR_SPACING = (2.03642011, 2.03642011, 3.0)
     #2 options from the AMOS22 challenge paper Fabian Isensee
     #AMOS_SPACING = (1.03642011, 2.03642011, 1.0)
-    AMOS_SPACING = (3*0.69, 3*0.69, 3*2.0)
-    #AMOS_SPACING = (2*1.5, 2*1.0, 2*1.0) 
+    #AMOS_SPACING = (3*0.69, 3*0.69, 3*2.0) #problems with sample 0530 label has different shape
+    AMOS_SPACING = (3*1.5, 3*1.0, 3*1.0) 
     # TODO Franzi Define AMOS Spacings
 
     if args.dataset == "AutoPET" or args.dataset == "AutoPET2" or args.dataset == "AutoPET2_Challenge":

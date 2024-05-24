@@ -28,6 +28,7 @@ from monai.utils.enums import EngineStatsKeys as ESKeys
 from monai.utils.module import look_up_option
 from monai.metrics import DiceMetric
 from monai.metrics import MSEMetric
+from monai.data import decollate_batch
 
 logger = logging.getLogger("sw_fastedit")
 
@@ -331,9 +332,17 @@ class SupervisedEvaluator(Evaluator):
 
                 engine.state.output[Keys.LABEL] = targets[:, 0:1]
                 engine.state.output[Keys.PRED] = engine.inferer(inputs_seg_ep, engine.network[1], *args, **kwargs)
+        #dm = DiceMetric(include_background=True, reduction="mean", get_not_nans=False)
+
         mse_metric = self.mse_metric(y_pred=engine.state.output['pred_ep'], y=targets[:, 1:2]).item()
-        dice_metric = self.dice_metric(y_pred=torch.argmax(engine.state.output[Keys.PRED], dim=1, keepdims=True), y=targets[:, 0:1]).item()
-        logger.info(f'Dice Metric: {dice_metric} MSE Metric: {mse_metric}')
+        #print('dice metric ', y_pred=torch.argmax(engine.state.output[Keys.PRED], dim=1, keepdims=True), y=targets[:, 0:1]))
+           
+        pred = decollate_batch(torch.argmax(engine.state.output[Keys.PRED], dim=1, keepdims=True))
+        target = decollate_batch(targets[:, 0:1])
+        dice_metric = self.dice_metric(y_pred=pred, y=target)
+        logger.info(f'Dice Metric decollate: {dice_metric} MSE Metric: {mse_metric}')
+
+        #print("our own dice:", torch.nanmean(dm(y_pred=torch.argmax(engine.state.output[Keys.PRED], dim=1, keepdims=True)[0,0], y=targets[0,0])))
         engine.state.output[Keys.LABEL] = targets
         engine.fire_event(IterationEvents.FORWARD_COMPLETED)
         engine.fire_event(IterationEvents.MODEL_COMPLETED)

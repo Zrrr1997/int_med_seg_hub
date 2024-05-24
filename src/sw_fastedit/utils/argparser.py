@@ -190,7 +190,7 @@ def parse_args():
 
 
     # Guidance Signal Hyperparameters
-    parser.add_argument("--sigma", type=int, default=3) #breaks ep when higher
+    parser.add_argument("--sigma", type=int, default=7) #breaks ep when higher
     parser.add_argument("--no_disks", default=False, action="store_true")
     parser.add_argument("--gdt", default=False, action="store_true")
 

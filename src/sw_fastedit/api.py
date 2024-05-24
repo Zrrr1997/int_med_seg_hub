@@ -93,7 +93,24 @@ def get_optimizer(optimizer: str, lr: float, network):
         optimizer = Novograd(all_params, lr)
     elif optimizer == "Adam":
         optimizer = torch.optim.Adam(all_params, lr)
+
+    print_parameter_groups(optimizer)
+    optimizer_state_dict = optimizer.state_dict()
+
+    #Get the keys of the optimizer's state_dict
+    optimizer_keys = optimizer_state_dict.keys()
+    print("optimzer keys", optimizer_keys)
+
     return optimizer
+
+def print_parameter_groups(optimizer):
+    print("Optimizer Parameter Groups:")
+    for i, param_group in enumerate(optimizer.param_groups):
+        print(f"Group {i}:")
+        for param_name, param_value in param_group.items():
+            if param_name != 'params':
+                print(f"\t{param_name}: {param_value}")
+        print(f"\tNumber of Parameters: {len(param_group['params'])}")
 
 
 def get_loss_function(loss_args, loss_kwargs=None):
@@ -469,66 +486,7 @@ def get_additional_metrics(labels, include_background=False, loss_kwargs=None, s
     return additional_metrics
 
 
-def get_test_evaluator(
-    args,
-    networks,
-    inferer,
-    device,
-    val_loader,
-    post_transform,
-    resume_from="None",
-) -> SupervisedEvaluator:
-    """
-    Retrieves a supervised evaluator for testing in a MONAI training workflow.
 
-    Args:
-        args: Command-line arguments and configuration settings.
-        network: The model to be evaluated.
-        inferer: The inference strategy or inferer.
-        device: The computing device (e.g., "cuda" or "cpu") on which to run the evaluation.
-        val_loader: The data loader for the validation/testing dataset.
-        post_transform: Post-processing transformation for the output predictions.
-        resume_from (str, optional): Path to a checkpoint file to resume training from (default is "None").
-
-    Returns:
-        SupervisedEvaluator: An instance of the supervised evaluator for testing.
-
-    TODO Franzi:
-        # SupervisedEvaluator and Trainer originate from PyTorch Ignite
-    """
-    init(args)
-
-    evaluator = SupervisedEvaluator(
-        device=device,
-        val_data_loader=val_loader,
-        networks=networks,
-        inferer=inferer,
-        postprocessing=post_transform,
-        amp=args.amp,
-        val_handlers=get_val_handlers(
-            sw_roi_size=args.sw_roi_size,
-            inferer=args.inferer,
-            gpu_size=args.gpu_size,
-            garbage_collector=(not args.non_interactive),
-        ),
-    )
-
-    save_dict = {
-        "net": networks,
-    }
-
-    if resume_from != "None":
-        logger.info(f"{args.gpu}:: Loading Network...")
-        logger.info(f"{save_dict.keys()=}")
-        logger.info(f"CWD: {os.getcwd()}")
-        map_location = device
-        checkpoint = torch.load(resume_from)
-        logger.info(f"{checkpoint.keys()=}")
-        networks.load_state_dict(checkpoint["net"]) 
-        handler = CheckpointLoader(load_path=resume_from, load_dict=save_dict, map_location=map_location)
-        handler(evaluator)
-
-    return evaluator
 
 
 def get_supervised_evaluator(
@@ -605,53 +563,7 @@ def get_supervised_evaluator(
 
 
 
-def get_ensemble_evaluator(
-    args, networks, inferer, device, val_loader, post_transform, resume_from="None", nfolds=5
-) -> EnsembleEvaluator:
-    """
-    Retrieves an ensemble evaluator for validation in a MONAI training workflow.
 
-    Args:
-        args: Command-line arguments and configuration settings.
-        networks: List of neural network models to be evaluated in the ensemble.
-        inferer: The inference strategy or inferer for the ensemble.
-        device: The computing device (e.g., "cuda" or "cpu") on which to run the evaluation.
-        val_loader: The data loader for the validation dataset.
-        post_transform: Post-processing transformation for the ensemble predictions.
-        resume_from (str, optional): Path to a directory containing individual checkpoint files for each network (default is "None").
-        nfolds (int, optional): Number of folds or networks in the ensemble (default is 5).
-
-    Returns:
-        EnsembleEvaluator: An instance of the ensemble evaluator for validation.
-    """
-
-    init(args)
-
-    device = torch.device(f"cuda:{args.gpu}")
-    prediction_keys = [f"pred_{i}" for i in range(nfolds)]
-
-    evaluator = EnsembleEvaluator(
-        device=device,
-        val_data_loader=val_loader,
-        networks=networks,
-        inferer=inferer,
-        postprocessing=post_transform,
-        pred_keys=prediction_keys,
-        amp=args.amp,
-    )
-
-    if resume_from != "None":
-        logger.info(f"{args.gpu}:: Loading Networks...")
-        logger.info(f"CWD: {os.getcwd()}")
-        resume_path = os.path.abspath(resume_from)
-        logger.info(f"{resume_path=}")
-
-        for i in range(nfolds):
-            file_path = os.path.join(resume_path, f"{i}.pt")
-            logger.info(f"{file_path=}")
-            checkpoint = torch.load(file_path)
-            networks[i].load_state_dict(checkpoint["net"])
-    return evaluator
 
 
 def get_trainer(
@@ -773,7 +685,6 @@ def get_trainer(
         additional_metrics=train_additional_metrics,
         train_handlers=train_handlers,
     )
-
     if not args.eval_only:
             save_dict = {
                 "trainer": trainer,
@@ -835,6 +746,8 @@ def get_trainer(
         logger.info(f"{save_dict.keys()=}")
         map_location = device  # {f"cuda:{args.gpu}": f"cuda:{args.gpu}"}
         checkpoint = torch.load(resume_from)
+        #print_loaded_state_dict(handler)
+        
 
         for key in save_dict:
             # If it fails: the file may be broken or incompatible (e.g. evaluator has not been run)
@@ -844,6 +757,8 @@ def get_trainer(
 
         logger.critical("!!!!!!!!!!!!!!!!!!!! RESUMING !!!!!!!!!!!!!!!!!!!!!!!!!")
         handler = CheckpointLoader(load_path=resume_from, load_dict=save_dict, map_location=map_location)
+        print(checkpoint['opt']['param_groups'])
+        #print_loaded_state_dict(checkpoint['opt']['param_groups'])
         if trainer is not None:
             handler(trainer)
         else:
@@ -856,6 +771,13 @@ def get_trainer(
 
     return trainer, evaluator, train_key_metric, train_additional_metrics, val_key_metric, val_additional_metrics
 
+def print_loaded_state_dict(state_dict: dict):
+    print("Loaded State Dictionary:")
+    for key, value in state_dict.items():
+        if isinstance(value, torch.Tensor):
+            print(f"Key: {key}, Size: {value.size()}")
+        else:
+            print(f"Key: {key}, Type: {type(value)}")
 
 @run_once
 def init(args):
